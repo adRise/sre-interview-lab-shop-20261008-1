@@ -52,7 +52,7 @@ spec:
             # No cap: the active catalog (about 2,000 products) fits in memory,
             # and a cap lowered the hit rate in the last load test.
             - name: CACHE_MAX_MB
-              value: "0"
+              value: "100"
             - name: PAYMENTS_URL
               value: http://payments:8080
             - name: RECS_URL
