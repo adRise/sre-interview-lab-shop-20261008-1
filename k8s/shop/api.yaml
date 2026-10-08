@@ -60,7 +60,7 @@ spec:
           resources:
             requests:
               cpu: "1"
-              memory: 256Mi
+              memory: 512Mi
           readinessProbe:
             httpGet:
               path: /healthz
