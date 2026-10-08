@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cart-cleanup
+  labels:
+    app: cart-cleanup
+    app.kubernetes.io/part-of: shop
+spec:
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        metadata:
+          labels:
+            app: cart-cleanup
+            app.kubernetes.io/part-of: shop
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: cart-cleanup
+              image: 490233488193.dkr.ecr.us-east-2.amazonaws.com/shop:1.0.4
+              args: ["cart-cleanup"]
+              envFrom:
+                - secretRef:
+                    name: shop-db
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 16Mi
+                limits:
+                  memory: 64Mi

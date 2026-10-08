@@ -1,0 +1,129 @@
+# receipts: the official nginx image as a file server. PUT stores a file under
+# /data/receipts/ and GET returns it (ngx_http_dav_module).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: receipts-nginx
+  labels:
+    app: receipts
+    app.kubernetes.io/part-of: shop
+data:
+  default.conf: |
+    server {
+      listen 8080;
+      client_max_body_size 20m;
+      client_body_temp_path /data/.tmp;
+
+      location = /healthz {
+        access_log off;
+        return 200 "ok\n";
+      }
+
+      location /receipts/ {
+        root /data;
+        dav_methods PUT;
+        create_full_put_path on;
+        dav_access user:rw group:rw all:r;
+      }
+    }
+
+    server {
+      listen 8081;
+      location = /stub_status {
+        stub_status;
+      }
+    }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: receipts
+  labels:
+    app: receipts
+    app.kubernetes.io/part-of: shop
+spec:
+  serviceName: receipts
+  replicas: 1
+  selector:
+    matchLabels:
+      app: receipts
+  template:
+    metadata:
+      labels:
+        app: receipts
+        app.kubernetes.io/part-of: shop
+    spec:
+      securityContext:
+        # nginx worker processes run as nginx (uid and gid 101).
+        fsGroup: 101
+      containers:
+        - name: nginx
+          image: nginx:1.29
+          ports:
+            - name: http
+              containerPort: 8080
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /etc/nginx/conf.d
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+        - name: exporter
+          image: nginx/nginx-prometheus-exporter:1.4
+          args:
+            - --nginx.scrape-uri=http://127.0.0.1:8081/stub_status
+          ports:
+            - name: metrics
+              containerPort: 9113
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+      volumes:
+        - name: config
+          configMap:
+            name: receipts-nginx
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: gp3
+        resources:
+          requests:
+            storage: 100Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: receipts
+  labels:
+    app: receipts
+    app.kubernetes.io/part-of: shop
+spec:
+  selector:
+    app: receipts
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+    - name: metrics
+      port: 9113
+      targetPort: metrics

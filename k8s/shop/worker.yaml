@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  labels:
+    app: worker
+    app.kubernetes.io/part-of: shop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+        app.kubernetes.io/part-of: shop
+    spec:
+      containers:
+        - name: worker
+          image: 490233488193.dkr.ecr.us-east-2.amazonaws.com/shop:1.0.4
+          args: ["worker"]
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: shop-db
+          env:
+            - name: RECEIPTS_URL
+              value: http://receipts:8080
+            - name: SPOOL_DIR
+              value: /spool
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: spool
+              mountPath: /spool
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+      volumes:
+        - name: spool
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: worker
+  labels:
+    app: worker
+    app.kubernetes.io/part-of: shop
+spec:
+  selector:
+    app: worker
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

@@ -1,0 +1,31 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: shop
+  labels:
+    app.kubernetes.io/part-of: shop
+spec:
+  selector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [web, api, payments, recs, worker]
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: receipts
+  labels:
+    app.kubernetes.io/part-of: shop
+spec:
+  selector:
+    matchLabels:
+      app: receipts
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s

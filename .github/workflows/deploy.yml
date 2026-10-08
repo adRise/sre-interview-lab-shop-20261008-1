@@ -1,0 +1,54 @@
+name: deploy
+
+# Every push to main deploys: terraform/shop first, then k8s/shop.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: arn:aws:iam::490233488193:role/lab-ci
+          aws-region: us-east-2
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+
+      - name: Terraform
+        working-directory: terraform/shop
+        run: |
+          terraform init -input=false
+          terraform apply -input=false -auto-approve
+
+      # kubectl for the cluster's Kubernetes version (1.35); the runner's own
+      # kubectl follows the newest release.
+      - name: kubectl
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -fsSLo "$RUNNER_TEMP/bin/kubectl" https://dl.k8s.io/release/v1.35.9/bin/linux/amd64/kubectl
+          echo "3cfeaf80be482b435b0aa214aff6e0b2c312ee23c0ff20810c75517b6004c6eb  $RUNNER_TEMP/bin/kubectl" | sha256sum -c -
+          chmod +x "$RUNNER_TEMP/bin/kubectl"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Kubernetes
+        run: |
+          aws eks update-kubeconfig --name sre-interview-lab --region us-east-2
+          kubectl version --client
+          kubectl apply -k k8s/shop
